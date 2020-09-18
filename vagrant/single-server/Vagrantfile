@@ -1,0 +1,52 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+VM_MEMORY = 1024
+VM_CPUS = 1
+# this is the password you will set for your Splunk admin user
+SPLUNK_PASS  = "changeme1"
+# Splunk home directory
+SPLUNK_HOME  = "/opt/splunk"
+
+Vagrant.configure("2") do |config|
+
+    config.vm.box = "badarsebard/ubuntu-18.04-splunk"
+    config.vm.define "splunk"
+    config.vm.hostname = "splunk"
+    config.vm.network "private_network", ip: "192.168.100.10"
+
+    config.vm.synced_folder "../../src/app1", "/opt/splunk/etc/apps/app1", owner: "splunk", group: "splunk"
+    # config.vm.synced_folder "../../src/app2", "/opt/splunk/etc/apps/app2", owner: "splunk", group: "splunk"
+
+    config.vm.provider "vmware_desktop" do |v|
+        v.memory = "#{VM_MEMORY}"
+        v.cpus = "#{VM_CPUS}"
+    end
+
+    config.vm.provider "virtualbox" do |v|
+        v.memory = "#{VM_MEMORY}"
+        v.cpus = "#{VM_CPUS}"
+    end
+
+    config.vm.provision "bootstrap", type: "shell" do |s|
+        s.privileged = false
+        s.name ="Bootstrap Provisioner"
+        s.path = "../scripts/provision.sh"
+        s.env = {
+            :SPLUNK_HOME  => "#{SPLUNK_HOME}",
+            :SPLUNK_BIN   => "#{SPLUNK_HOME}/bin/splunk",
+            :SPLUNK_PASS  => "#{SPLUNK_PASS}"
+        }
+    end
+
+    config.vm.provision "startup", type: "shell", run: "always" do |t|
+        t.privileged = false
+        t.name ="Start up provisioner"
+        t.path = "../scripts/start-splunk.sh"
+        t.env = { :SPLUNK_BIN   => "/opt/splunk/bin/splunk" }
+    end
+
+    config.trigger.before [:halt, :reload] do |trigger|
+        trigger.run_remote = {inline: "sudo -u splunk /opt/splunk/bin/splunk stop -f"}
+    end
+end
